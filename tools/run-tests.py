@@ -166,7 +166,7 @@ def run_internal_test(engine, arch, extra_arg):
     copy(join(INTERNAL_OVERRIDE_DIR, 'internal-test-cases.txt'), join(INTERNAL_DIR, 'internal-test-cases.txt'))
     copy(join(INTERNAL_OVERRIDE_DIR, 'internal-test-driver.py'), join(INTERNAL_DIR, 'driver.py'))
 
-    run(['python', 'driver.py', engine, 'internal-test-cases.txt'],
+    run(['python3', 'driver.py', engine, 'internal-test-cases.txt'],
         cwd=INTERNAL_DIR)
 
 def copy_test262_files():
@@ -306,6 +306,8 @@ def run_spidermonkey(engine, arch, extra_arg):
     SPIDERMONKEY_OVERRIDE_DIR = join(PROJECT_SOURCE_DIR, 'tools', 'test', 'spidermonkey')
     SPIDERMONKEY_DIR = join(PROJECT_SOURCE_DIR, 'test', 'vendortest', 'SpiderMonkey')
 
+    # Skip because test/vendortest/SpiderMonkey/jstests.py needs Python 2.
+    return ""
     run([join(SPIDERMONKEY_DIR, 'jstests.py'),
          '--no-progress', '-s',
          '--timeout', '500',
@@ -479,7 +481,7 @@ def _run_jetstream(engine, target_test):
 
     run([join('.', 'run.sh'), engine, target_test],
         cwd=JETSTREAM_DIR)
-    run(['python', join(JETSTREAM_OVERRIDE_DIR, 'parsingResults.py'),
+    run(['python3', join(JETSTREAM_OVERRIDE_DIR, 'parsingResults.py'),
          join(JETSTREAM_OVERRIDE_DIR, 'jetstream-result-raw.res'),
          target_test])
     if 'NaN' in ''.join(readfile(join(JETSTREAM_OVERRIDE_DIR, 'jetstream-result-raw.res'))):
@@ -616,6 +618,8 @@ def run_v8(engine, arch, extra_arg):
     else:
         shell_str = engine
 
+    # Skip because test/vendortest/v8/tools/run-tests.py needs Python 2.
+    return ""
     stdout = run([join(V8_DIR, 'tools', 'run-tests.py'),
                   '--timeout=120',
                   '--quickcheck',
