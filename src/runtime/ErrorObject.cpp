@@ -129,12 +129,12 @@ ErrorObject* ErrorObject::createBuiltinError(ExecutionState& state, ErrorCode co
 
 void ErrorObject::throwBuiltinError(ExecutionState& state, ErrorCode code, String* objectName, bool prototype, String* functionName, const char* templateString)
 {
-    state.throwException(Value(ErrorObject::createBuiltinError(state, code, objectName, prototype, functionName, templateString, false)));
+    state.throwException(Value(ErrorObject::createBuiltinError(state, code, objectName, prototype, functionName, templateString, true)));
 }
 
 void ErrorObject::throwBuiltinError(ExecutionState& state, ErrorCode code, String* errorMessage)
 {
-    state.throwException(Value(ErrorObject::createError(state, code, errorMessage, false)));
+    state.throwException(Value(ErrorObject::createError(state, code, errorMessage, true)));
 }
 
 static Value builtinErrorObjectStackInfoGet(ExecutionState& state, Value thisValue, size_t argc, Value* argv, Optional<Object*> newTarget)

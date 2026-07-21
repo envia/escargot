@@ -483,7 +483,16 @@ void SandBox::fillStackDataIntoErrorObject(const Value& e)
     if (e.isObject() && e.asObject()->isErrorObject()) {
         ErrorObject* obj = e.asObject()->asErrorObject();
 
-        obj->setStackTraceData(StackTraceData::create(this));
+        // A stack trace is captured once, at Error construction time (see
+        // ErrorObject::updateStackTraceData). If this error was caught and
+        // rethrown by JS before reaching this SandBox boundary, it already
+        // has its original (deeper) trace; overwriting it here would replace
+        // it with the shallow trace of wherever it was last rethrown, which
+        // does not match real-world engine behavior (V8 et al. never touch
+        // Error.stack again after construction).
+        if (!obj->stackTraceData()) {
+            obj->setStackTraceData(StackTraceData::create(this));
+        }
     }
 }
 } // namespace Escargot
