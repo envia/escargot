@@ -126,13 +126,38 @@ InterpretedCodeBlock* ScriptParser::generateCodeBlockTreeFromASTWalker(Context* 
             }
         }
 
-        if (scopeCtx->m_hasThisExpression && scopeCtx->m_isArrowFunctionExpression) {
+        // private name access (e.g. `#f in o`) needs the upper env's homeObject
+        // at call time just like `this` does, so it forces the same walk.
+        if ((scopeCtx->m_hasThisExpression || scopeCtx->m_hasClassPrivateNameExpression) && scopeCtx->m_isArrowFunctionExpression) {
             // every arrow function should save this value of upper env.
             // except arrow function is localed on class constructor(class constructor needs test of this binding is valid)
             InterpretedCodeBlock* c = codeBlock;
             while (c) {
                 if (c->isKindOfFunction()) {
                     if (c->isArrowFunctionExpression()) {
+                        bool isClassInitializerVirtualArrow = c->isOneExpressionOnlyVirtualArrowFunctionExpression()
+                            || c->isFunctionBodyOnlyVirtualArrowFunctionExpression();
+                        if (c != codeBlock && isClassInitializerVirtualArrow && scopeCtx->m_hasClassPrivateNameExpression) {
+                            /*
+                            // class field initializers and static initialization
+                            // blocks are compiled as virtual arrow functions; an
+                            // arrow nested in one needs the initializer's env
+                            // (whose function object carries the class homeObject)
+                            // reachable at call time for private member access:
+                            var C = class {
+                              #f = 'Test262';
+                              #m = () => {
+                                return this.#f;
+                              };
+                              method() { return this.#m(); }
+                            }
+                            */
+                            c->m_canAllocateEnvironmentOnStack = false;
+                            // Keep walking: a nested class can refer to a private
+                            // name from an outer class, so every enclosing virtual
+                            // initializer that links those class environments must
+                            // remain reachable.
+                        }
                         // pass
                     } else if (c->isClassConstructor()) {
                         c->m_canAllocateEnvironmentOnStack = false;

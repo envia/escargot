@@ -86,6 +86,25 @@ public:
 
         return true;
     }
+
+    static bool needsToReferOuterClassWhenEvaluatePrivateMember(ByteCodeGenerateContext* context, AtomicString privateName)
+    {
+        InterpretedCodeBlock* c = context->m_codeBlock;
+        while (c) {
+            auto privateNames = c->classPrivateNames();
+            if (privateNames) {
+                for (size_t i = 0; i < privateNames->size(); i++) {
+                    if (privateNames->data()[i] == privateName) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            c = c->parent();
+        }
+
+        return true;
+    }
 };
 } // namespace Escargot
 
