@@ -4109,11 +4109,7 @@ NEVER_INLINE void InterpreterSlowPath::initializeClassOperation(ExecutionState& 
             name = AtomicString(state, code->m_name);
         }
 
-        Optional<Object*> outerClassConstructor;
-        auto home = state.mostNearestHomeObject();
-        if (home) {
-            outerClassConstructor = ExecutionState::convertHomeObjectIntoPrivateMemberContextObject(home.value());
-        }
+        Optional<Object*> outerClassConstructor = state.tryFindPrivateMemberContextObject();
 
         if (code->m_codeBlock) {
             constructor = new ScriptClassConstructorFunctionObject(state, constructorParent.asObject(), code->m_codeBlock,
@@ -4525,7 +4521,8 @@ NEVER_INLINE void InterpreterSlowPath::binaryInOperation(ExecutionState& state, 
     }
 
     if (UNLIKELY(code->m_extraData)) {
-        registerFile[code->m_dstIndex] = Value(right.toObject(state)->hasPrivateMember(state, state.findPrivateMemberContextObject(), AtomicString(state, left.asString()), false));
+        bool shouldReferOuterClass = code->m_extraData == 2;
+        registerFile[code->m_dstIndex] = Value(right.toObject(state)->hasPrivateMember(state, state.findPrivateMemberContextObject(), AtomicString(state, left.asString()), shouldReferOuterClass));
     } else {
         registerFile[code->m_dstIndex] = Value(right.toObject(state)->hasProperty(state, ObjectPropertyName(state, left)));
     }

@@ -49,8 +49,10 @@ public:
         context->giveUpRegister();
         context->giveUpRegister();
 
-        // extra data 1 means private id in operation
-        codeBlock->pushCode(BinaryInOperation(ByteCodeLOC(m_loc.index), src0, src1, dstRegister, 1), context, this->m_loc.index);
+        // extra data 1 means a private id in the current class, and 2 means
+        // a private id that should be resolved through an outer class.
+        size_t extraData = needsToReferOuterClassWhenEvaluatePrivateMember(context, p) ? 2 : 1;
+        codeBlock->pushCode(BinaryInOperation(ByteCodeLOC(m_loc.index), src0, src1, dstRegister, extraData), context, this->m_loc.index);
 
         context->m_canSkipCopyToRegister = directBefore;
     }
@@ -69,7 +71,6 @@ public:
         m_left->iterateChildren(fn);
         m_right->iterateChildren(fn);
     }
-
 
 private:
     Node* m_left;
