@@ -311,6 +311,7 @@ public:
 
     Optional<Object*> mostNearestHomeObject(size_t skipCount = 0);
     static Object* convertHomeObjectIntoPrivateMemberContextObject(Object* o);
+    Optional<Object*> tryFindPrivateMemberContextObject();
     Object* findPrivateMemberContextObject();
 
     // http://www.ecma-international.org/ecma-262/6.0/#sec-getnewtarget
