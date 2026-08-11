@@ -181,7 +181,7 @@ public:
                 context->giveUpRegister();
             } else if (UNLIKELY(m_isReferencePrivateField)) {
                 codeBlock->pushCode(ComplexGetObjectOperation(ByteCodeLOC(m_loc.index), objectIndex, dstIndex, m_property->asIdentifier()->name(),
-                                                              needsToReferOuterClassWhenEvaluatePrivateMember(context)),
+                                                              needsToReferOuterClassWhenEvaluatePrivateMember(context, m_property->asIdentifier()->name())),
                                     context, this->m_loc.index);
             } else if (m_object->isIdentifier()
                        && m_object->asIdentifier()->isPointsArgumentsObject(context)
@@ -247,7 +247,7 @@ public:
             } else if (UNLIKELY(m_isReferencePrivateField)) {
                 codeBlock->pushCode(ComplexSetObjectOperation(ByteCodeLOC(m_loc.index), objectIndex,
                                                               m_property->asIdentifier()->name(), valueIndex,
-                                                              needsToReferOuterClassWhenEvaluatePrivateMember(context)),
+                                                              needsToReferOuterClassWhenEvaluatePrivateMember(context, m_property->asIdentifier()->name())),
                                     context, this->m_loc.index);
                 context->giveUpRegister();
             } else {
@@ -313,7 +313,7 @@ public:
                 context->giveUpRegister();
             } else if (UNLIKELY(m_isReferencePrivateField)) {
                 codeBlock->pushCode(ComplexGetObjectOperation(ByteCodeLOC(m_loc.index), objectIndex, resultIndex, m_property->asIdentifier()->name(),
-                                                              needsToReferOuterClassWhenEvaluatePrivateMember(context)),
+                                                              needsToReferOuterClassWhenEvaluatePrivateMember(context, m_property->asIdentifier()->name())),
                                     context, this->m_loc.index);
             } else {
                 codeBlock->pushCode(GetObjectPreComputedCase(ByteCodeLOC(m_loc.index), objectIndex, resultIndex, m_property->asIdentifier()->name()), context, this->m_loc.index);
@@ -352,34 +352,6 @@ public:
 
         m_object->iterateChildren(fn);
         m_property->iterateChildren(fn);
-    }
-
-    bool needsToReferOuterClassWhenEvaluatePrivateMember(ByteCodeGenerateContext* context)
-    {
-        ASSERT(m_isReferencePrivateField);
-
-        auto pnames = context->m_codeBlock->classPrivateNames();
-        if (pnames) {
-            for (size_t i = 0; i < pnames->size(); i++) {
-                AtomicString name = pnames->data()[i];
-
-                InterpretedCodeBlock* c = context->m_codeBlock->parent();
-
-                while (c) {
-                    auto parentNames = c->classPrivateNames();
-                    if (parentNames) {
-                        for (size_t j = 0; j < parentNames->size(); j++) {
-                            if (parentNames->data()[j] == name) {
-                                return false;
-                            }
-                        }
-                    }
-                    c = c->parent();
-                }
-            }
-        }
-
-        return true;
     }
 
 private:
