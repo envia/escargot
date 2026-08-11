@@ -4525,7 +4525,8 @@ NEVER_INLINE void InterpreterSlowPath::binaryInOperation(ExecutionState& state, 
     }
 
     if (UNLIKELY(code->m_extraData)) {
-        registerFile[code->m_dstIndex] = Value(right.toObject(state)->hasPrivateMember(state, state.findPrivateMemberContextObject(), AtomicString(state, left.asString()), false));
+        bool shouldReferOuterClass = code->m_extraData == 2;
+        registerFile[code->m_dstIndex] = Value(right.toObject(state)->hasPrivateMember(state, state.findPrivateMemberContextObject(), AtomicString(state, left.asString()), shouldReferOuterClass));
     } else {
         registerFile[code->m_dstIndex] = Value(right.toObject(state)->hasProperty(state, ObjectPropertyName(state, left)));
     }

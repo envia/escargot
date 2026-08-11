@@ -86,6 +86,37 @@ public:
 
         return true;
     }
+
+    static bool needsToReferOuterClassWhenEvaluatePrivateMember(ByteCodeGenerateContext* context, AtomicString privateName)
+    {
+        InterpretedCodeBlock* c = context->m_codeBlock;
+        while (c) {
+            auto privateNames = c->classPrivateNames();
+            if (privateNames) {
+                for (size_t i = 0; i < privateNames->size(); i++) {
+                    if (privateNames->data()[i] == privateName) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            if (c->isClassMethod() || c->isClassStaticMethod() || c->isClassConstructor()
+                || c->isOneExpressionOnlyVirtualArrowFunctionExpression() || c->isFunctionBodyOnlyVirtualArrowFunctionExpression()) {
+                // this block belongs to the innermost enclosing class -- the
+                // class that becomes the private member context at run time --
+                // but it carries no private-name list (lists are attached only
+                // when a name is shadowed or direct eval is seen). A list found
+                // above would belong to a different class, so resolve through
+                // the outer-class chain instead. That is exact: without a list
+                // this class shadows nothing, so a name it declares cannot also
+                // appear on the outer chain.
+                return true;
+            }
+            c = c->parent();
+        }
+
+        return true;
+    }
 };
 } // namespace Escargot
 
