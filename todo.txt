@@ -1,0 +1,26 @@
+• 현재 상태는 승인 보류가 적절합니다. #1635 (https://github.com/Samsung/escargot/issues/1635)의 직접 재현은 해결됐지만, 다음 3건이 남아 있습니다.
+
+  1. [P1] private-name shadow 경계를 넘어 탐색합니다 — escargot_/src/parser/ast/ExpressionNode.h:103, escargot_/src/runtime/Object.cpp:2089
+
+     Outer.#x → Mid.#x → Leaf 구조에서 Leaf의 #x는 Mid의 이름이어야 합니다. 그런데 Outer 객체를 검사하면 브랜치는 Mid의 brand 불일치를 무시하고 Outer까지 내려가 #x in outer === true를 반환합니다. 읽기·쓰기도 Outer의 #x를 읽고 변경합니다. 이는 서로 다른 private-name identity를 같은 문자열로 취급하는 문제입니다. js_vendor_tc_/Escargot/regression-tests/issue-1635.js:197는 Mid
+     와 {}만 검사하고 Outer 객체를 빠뜨렸습니다. 탐색은 private name을 선언한 첫 클래스에서 반드시 멈춰야 합니다.
+
+  2. [P1] arrow의 non-arrow descendant가 private name을 쓰면 환경이 유실됩니다 — escargot_/src/parser/ScriptParser.cpp:142
+
+     다음 유효한 코드는 Node에서 93이지만 후보 엔진은 TypeError를 던집니다.
+
+     class A {
+       #x = 93;
+       f = () => {
+         class B { g(o) { return o.#x; } }
+         return new B().g(this);
+       };
+     }
+
+     m_hasClassPrivateNameExpression이 현재 arrow scope만 나타내므로, 중첩 일반 함수·object method·class method의 private 사용이 field-initializer 환경을 heap으로 올리지 못합니다. js_vendor_tc_/Escargot/regression-tests/issue-1635.js:123는 내부 접근도 arrow field로 작성되어 이 누락을 가립니다.
+
+  3. [P2] captured arrow의 direct eval이 PrivateEnvironment를 받지 못합니다 — escargot_/src/parser/ScriptParser.cpp:131
+
+     class A { #x = 21; f = (o) => eval("o.#x"); }
+
+     Node는 21을 반환하지만 후보 엔진은 Private field '#x' must be declared SyntaxError를 냅니다. Direct eval도 arrow의 PrivateEnvironment를 상속하므로, m_hasEval을 보수적으로 private-context 사용으로 처리하고 관련 classPrivateNames 메타데이터도 전파해야 합니다. 현재 js_vendor_tc_/Escargot/regression-tests/issue-1635.js:210는 일반 메서드에서 빈 문자열만 eval합니다.
