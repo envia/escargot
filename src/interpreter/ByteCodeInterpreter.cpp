@@ -4109,11 +4109,7 @@ NEVER_INLINE void InterpreterSlowPath::initializeClassOperation(ExecutionState& 
             name = AtomicString(state, code->m_name);
         }
 
-        Optional<Object*> outerClassConstructor;
-        auto home = state.mostNearestHomeObject();
-        if (home) {
-            outerClassConstructor = ExecutionState::convertHomeObjectIntoPrivateMemberContextObject(home.value());
-        }
+        Optional<Object*> outerClassConstructor = state.tryFindPrivateMemberContextObject();
 
         if (code->m_codeBlock) {
             constructor = new ScriptClassConstructorFunctionObject(state, constructorParent.asObject(), code->m_codeBlock,

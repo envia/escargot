@@ -128,27 +128,6 @@ Optional<LexicalEnvironment*> ExecutionState::mostNearestHeapAllocatedLexicalEnv
     return nullptr;
 }
 
-Optional<Object*> ExecutionState::mostNearestHomeObject(size_t skipCount)
-{
-    LexicalEnvironment* env = m_lexicalEnvironment;
-
-    while (env) {
-        auto rec = env->record();
-        if (rec->isDeclarativeEnvironmentRecord() && rec->asDeclarativeEnvironmentRecord()->isFunctionEnvironmentRecord()) {
-            auto homeObject = rec->asDeclarativeEnvironmentRecord()->asFunctionEnvironmentRecord()->homeObject();
-            if (homeObject) {
-                if (skipCount) {
-                    skipCount--;
-                } else {
-                    return homeObject;
-                }
-            }
-        }
-        env = env->outerEnvironment();
-    }
-    return nullptr;
-}
-
 Object* ExecutionState::convertHomeObjectIntoPrivateMemberContextObject(Object* o)
 {
     if (o->isScriptClassConstructorPrototypeObject()) {
@@ -157,27 +136,33 @@ Object* ExecutionState::convertHomeObjectIntoPrivateMemberContextObject(Object* 
     return o;
 }
 
+Optional<Object*> ExecutionState::tryFindPrivateMemberContextObject()
+{
+    LexicalEnvironment* env = m_lexicalEnvironment;
+
+    while (env) {
+        auto rec = env->record();
+        if (rec->isDeclarativeEnvironmentRecord() && rec->asDeclarativeEnvironmentRecord()->isFunctionEnvironmentRecord()) {
+            auto homeObject = rec->asDeclarativeEnvironmentRecord()->asFunctionEnvironmentRecord()->homeObject();
+            if (homeObject && (homeObject->isScriptClassConstructorPrototypeObject() || homeObject->isScriptClassConstructorFunctionObject())) {
+                return convertHomeObjectIntoPrivateMemberContextObject(homeObject);
+            }
+        }
+        env = env->outerEnvironment();
+    }
+
+    return nullptr;
+}
+
 Object* ExecutionState::findPrivateMemberContextObject()
 {
-    size_t skipCount = 0;
-    Optional<Object*> o;
-    while (true) {
-        auto test = mostNearestHomeObject(skipCount);
-        if (!test) {
-            break;
-        }
-        if (test->isScriptClassConstructorPrototypeObject() || test->isScriptClassConstructorFunctionObject()) {
-            o = test;
-            break;
-        }
-        skipCount++;
-    }
+    auto o = tryFindPrivateMemberContextObject();
     if (!o) {
         ErrorObject::throwBuiltinError(*this, ErrorCode::TypeError, "Cannot read/write private member here");
         return nullptr;
     }
 
-    return convertHomeObjectIntoPrivateMemberContextObject(o.value());
+    return o.value();
 }
 
 Object* ExecutionState::getNewTarget()
