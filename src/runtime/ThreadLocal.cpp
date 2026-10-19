@@ -712,7 +712,25 @@ void ThreadLocal::initialize(uint32_t optionFromGlobal)
 #endif
 
     // g_randEngine
-    g_randEngine = new std::mt19937(static_cast<unsigned int>(time(NULL)));
+    // Math.random must produce distinct sequences in distinct realms. A time
+    // seed alone repeats the sequence in threads initialized in the same second.
+    // Also distinguish initializations if random_device is deterministic.
+#if defined(ENABLE_THREADING)
+    static std::atomic<uint32_t> randomSeedCounter{ 0 };
+    uint32_t seedCounter = randomSeedCounter.fetch_add(1, std::memory_order_relaxed);
+#else
+    static uint32_t randomSeedCounter = 0;
+    uint32_t seedCounter = randomSeedCounter++;
+#endif
+#if defined(OS_BAREMETAL)
+    // Bare-metal standard libraries may not provide a random device.
+    uint32_t seedData[] = { seedCounter, static_cast<uint32_t>(time(NULL)), Global::platform()->tickMs() };
+#else
+    std::random_device randomDevice;
+    uint32_t seedData[] = { seedCounter, randomDevice(), randomDevice(), randomDevice(), randomDevice() };
+#endif
+    std::seed_seq seed(std::begin(seedData), std::end(seedData));
+    g_randEngine = new std::mt19937(seed);
 
     // g_bfContext
     bf_context_init(&g_bfContext, [](void* opaque, void* ptr, size_t size) -> void* { return realloc(ptr, size); }, nullptr);
