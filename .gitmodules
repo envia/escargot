@@ -1,6 +1,7 @@
 [submodule "third_party/GCutil"]
     path = third_party/GCutil
-    url = https://github.com/Samsung/gcutil.git
+    url = https://github.com/envia/starfish-submodules.git
+    branch = codex/2026/pastrymerge/gcutil/0002
     ignore = untracked
 [submodule "test/vendortest"]
     path = test/vendortest
