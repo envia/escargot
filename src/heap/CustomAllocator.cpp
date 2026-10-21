@@ -219,7 +219,13 @@ GC_ms_entry* markEncodedSmallValueVector(GC_word* addr,
                                          struct GC_ms_entry* mark_stack_limit,
                                          GC_word env)
 {
+#if defined(GC_DEBUG)
+    // Allocation metadata contains native addresses, not compressed values.
+    // Decoding their low halves can retain unrelated objects in the cage.
+    const char* start = (const char*)GC_USR_PTR_FROM_BASE(addr);
+#else
     const char* start = (const char*)addr;
+#endif
     const char* end = ((char*)addr) + GC_size(addr);
 
     constexpr size_t batchSize = 32;
