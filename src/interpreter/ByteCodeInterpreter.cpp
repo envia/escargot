@@ -4038,7 +4038,10 @@ NEVER_INLINE void InterpreterSlowPath::setGlobalVariableSlowCase(ExecutionState&
 
     auto findResult = go->structure()->findProperty(slot->m_propertyName);
     if (UNLIKELY(findResult.first == SIZE_MAX)) {
-        if (UNLIKELY(state.inStrictMode())) {
+        // Global object bindings include inherited properties. HasProperty
+        // must not invoke an accessor while resolving the assignment target.
+        // https://tc39.es/ecma262/#sec-object-environment-records-hasbinding-n
+        if (UNLIKELY(state.inStrictMode()) && !go->hasProperty(state, ObjectPropertyName(state, slot->m_propertyName))) {
             ErrorObject::throwBuiltinError(state, ErrorCode::ReferenceError, slot->m_propertyName.string(), false, String::emptyString(), ErrorObject::Messages::IsNotDefined);
         }
         VirtualIdDisabler d(state.context());

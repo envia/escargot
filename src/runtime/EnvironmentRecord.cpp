@@ -26,6 +26,7 @@
 #include "runtime/GlobalObject.h"
 #include "runtime/ModuleNamespaceObject.h"
 #include "parser/CodeBlock.h"
+#include "parser/Script.h"
 
 namespace Escargot {
 
@@ -469,7 +470,7 @@ void ModuleEnvironmentRecord::createBinding(ExecutionState& state, const AtomicS
     record.m_localName = name;
     record.m_isMutable = isMutable;
     record.m_isVarDeclaration = isVarDeclaration;
-    record.m_targetRecord = nullptr;
+    record.m_targetModule = nullptr;
     record.m_value = isVarDeclaration ? Value() : Value(Value::EmptyValue);
     m_moduleBindings.pushBack(record);
 }
@@ -478,7 +479,7 @@ void ModuleEnvironmentRecord::initializeBinding(ExecutionState& state, const Ato
 {
     for (size_t i = 0; i < m_moduleBindings.size(); i++) {
         if (m_moduleBindings[i].m_localName == name) {
-            ASSERT(m_moduleBindings[i].m_targetRecord == nullptr);
+            ASSERT(m_moduleBindings[i].m_targetModule == nullptr);
             m_moduleBindings[i].m_value = V;
             return;
         }
@@ -501,21 +502,21 @@ void ModuleEnvironmentRecord::setMutableBinding(ExecutionState& state, const Ato
 
 void ModuleEnvironmentRecord::setMutableBindingByBindingSlot(ExecutionState& state, const BindingSlot& slot, const AtomicString& name, const Value& v)
 {
-    ASSERT(m_moduleBindings[slot.m_index].m_targetRecord == nullptr);
+    ASSERT(m_moduleBindings[slot.m_index].m_targetModule == nullptr);
     writeCheck(state, slot.m_index);
     m_moduleBindings[slot.m_index].m_value = v;
 }
 
 void ModuleEnvironmentRecord::setMutableBindingByIndex(ExecutionState& state, const size_t i, const Value& v)
 {
-    ASSERT(m_moduleBindings[i].m_targetRecord == nullptr);
+    ASSERT(m_moduleBindings[i].m_targetModule == nullptr);
     writeCheck(state, i);
     m_moduleBindings[i].m_value = v;
 }
 
 void ModuleEnvironmentRecord::initializeBindingByIndex(ExecutionState& state, const size_t idx, const Value& v)
 {
-    ASSERT(m_moduleBindings[idx].m_targetRecord == nullptr);
+    ASSERT(m_moduleBindings[idx].m_targetModule == nullptr);
     m_moduleBindings[idx].m_value = v;
 }
 
@@ -524,8 +525,8 @@ EnvironmentRecord::GetBindingValueResult ModuleEnvironmentRecord::getBindingValu
     size_t len = m_moduleBindings.size();
     for (size_t i = 0; i < len; i++) {
         if (m_moduleBindings[i].m_localName == name) {
-            if (m_moduleBindings[i].m_targetRecord) {
-                return m_moduleBindings[i].m_targetRecord->getBindingValue(state, m_moduleBindings[i].m_targetBindingName);
+            if (m_moduleBindings[i].m_targetModule) {
+                return importedEnvironment(state, i)->getBindingValue(state, m_moduleBindings[i].m_targetBindingName);
             } else {
                 readCheck(state, i);
                 return GetBindingValueResult(m_moduleBindings[i].m_value);
@@ -538,21 +539,34 @@ EnvironmentRecord::GetBindingValueResult ModuleEnvironmentRecord::getBindingValu
 void ModuleEnvironmentRecord::setHeapValueByIndex(ExecutionState& state, const size_t idx, const Value& v)
 {
     writeCheck(state, idx);
-    ASSERT(m_moduleBindings[idx].m_targetRecord == nullptr);
+    ASSERT(m_moduleBindings[idx].m_targetModule == nullptr);
     m_moduleBindings[idx].m_value = v;
 }
 
 Value ModuleEnvironmentRecord::getHeapValueByIndex(ExecutionState& state, const size_t i)
 {
-    if (m_moduleBindings[i].m_targetRecord) {
-        return m_moduleBindings[i].m_targetRecord->getBindingValue(state, m_moduleBindings[i].m_targetBindingName).m_value;
+    if (m_moduleBindings[i].m_targetModule) {
+        return importedEnvironment(state, i)->getBindingValue(state, m_moduleBindings[i].m_targetBindingName).m_value;
     } else {
         readCheck(state, i);
         return m_moduleBindings[i].m_value;
     }
 }
 
-void ModuleEnvironmentRecord::createImportBinding(ExecutionState& state, AtomicString localName, ModuleEnvironmentRecord* targetRecord, AtomicString targetBindingName)
+ModuleEnvironmentRecord* ModuleEnvironmentRecord::importedEnvironment(ExecutionState& state, size_t index)
+{
+    // Import bindings refer to a Module Record, whose environment need not
+    // exist yet while a cyclic graph is being linked.
+    // https://tc39.es/ecma262/#sec-module-environment-records-getbindingvalue-n-s
+    auto& binding = m_moduleBindings[index];
+    auto* environment = binding.m_targetModule->moduleData()->m_moduleRecord;
+    if (!environment) {
+        ErrorObject::throwBuiltinError(state, ErrorCode::ReferenceError, binding.m_localName.string(), false, String::emptyString(), ErrorObject::Messages::IsNotInitialized);
+    }
+    return environment;
+}
+
+void ModuleEnvironmentRecord::createImportBinding(ExecutionState& state, AtomicString localName, Script* targetModule, AtomicString targetBindingName)
 {
     // Let envRec be the module Environment Record for which the method was invoked.
     // Assert: envRec does not already have a binding for N.
@@ -563,8 +577,8 @@ void ModuleEnvironmentRecord::createImportBinding(ExecutionState& state, AtomicS
     size_t len = m_moduleBindings.size();
     for (size_t i = 0; i < len; i++) {
         if (m_moduleBindings[i].m_localName == localName) {
-            ASSERT(m_moduleBindings[i].m_targetRecord == nullptr);
-            m_moduleBindings[i].m_targetRecord = targetRecord;
+            ASSERT(m_moduleBindings[i].m_targetModule == nullptr);
+            m_moduleBindings[i].m_targetModule = targetModule;
             m_moduleBindings[i].m_targetBindingName = targetBindingName;
             return;
         }

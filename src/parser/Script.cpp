@@ -1088,9 +1088,8 @@ Value Script::moduleInitializeEnvironment(ExecutionState& state)
                 // Call env.InitializeBinding(in.[[LocalName]], namespace).
                 moduleRecord->initializeBinding(state, in.m_localName, namespaceObject);
             } else {
-                ASSERT(std::get<0>(resolution.m_record.value())->moduleData()->m_moduleRecord != nullptr);
                 // Call envRec.CreateImportBinding(in.[[LocalName]], resolution.[[module]], resolution.[[bindingName]]).
-                moduleRecord->createImportBinding(state, in.m_localName, std::get<0>(resolution.m_record.value())->moduleData()->m_moduleRecord, std::get<1>(resolution.m_record.value()));
+                moduleRecord->createImportBinding(state, in.m_localName, std::get<0>(resolution.m_record.value()), std::get<1>(resolution.m_record.value()));
             }
         }
     }

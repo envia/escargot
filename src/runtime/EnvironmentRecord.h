@@ -1256,7 +1256,7 @@ public:
         bool m_isVarDeclaration;
         AtomicString m_localName;
         EncodedValue m_value;
-        ModuleEnvironmentRecord* m_targetRecord;
+        Script* m_targetModule;
         AtomicString m_targetBindingName;
     };
 
@@ -1316,9 +1316,11 @@ public:
         return GC_MALLOC_EXPLICITLY_TYPED(size, descr);
     }
 
-    void createImportBinding(ExecutionState& state, AtomicString localName, ModuleEnvironmentRecord* targetRecord, AtomicString targetBindingName);
+    void createImportBinding(ExecutionState& state, AtomicString localName, Script* targetModule, AtomicString targetBindingName);
 
 protected:
+    ModuleEnvironmentRecord* importedEnvironment(ExecutionState& state, size_t index);
+
     const ModuleBindingRecordVector& moduleBindings()
     {
         return m_moduleBindings;

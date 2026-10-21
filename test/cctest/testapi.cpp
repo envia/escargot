@@ -3854,6 +3854,45 @@ TEST(GCLeak, MostlyASCIIUTF8SourceIsKeptAsBytes)
     instance.release();
 }
 
+TEST(Module, CircularImportBindings)
+{
+    std::string filename = __FILE__;
+    filename = filename.substr(0, filename.find_last_of("/\\") + 1) + "module-cycle/entry.mjs";
+    auto source = builtinHelperFileRead(nullptr, filename.c_str(), "");
+    ASSERT_TRUE(source.hasValue());
+    PersistentRefHolder<VMInstanceRef> instance = VMInstanceRef::create();
+    PersistentRefHolder<ContextRef> context = createEscargotContext(instance.get());
+    auto result = evalScript(context.get(), source.value(), StringRef::createFromUTF8(filename.data(), filename.size()), true);
+    EXPECT_EQ(evalScript(context.get(), StringRef::createFromASCII("globalThis.moduleCyclePassed"), StringRef::createFromASCII("check.js"), false), "true") << result;
+    context.release();
+    instance.release();
+}
+
+TEST(Module, InheritedGlobalBindings)
+{
+    PersistentRefHolder<VMInstanceRef> instance = VMInstanceRef::create();
+    PersistentRefHolder<ContextRef> context = createEscargotContext(instance.get());
+    evalScript(context.get(), StringRef::createFromASCII(R"(
+        globalThis.setterValue = 0;
+        Object.setPrototypeOf(globalThis, Object.create(Object.getPrototypeOf(globalThis), {
+            inheritedSetter: { get() { throw new Error('getter must not run'); },
+                set(value) { globalThis.setterValue = value; } },
+            inheritedData: { value: 1, writable: true },
+            inheritedReadOnly: { value: 1 },
+            inheritedGetterOnly: { get() { throw new Error('getter must not run'); } }
+        }));
+    )"),
+               StringRef::createFromASCII("setup.js"), false);
+    std::string filename = __FILE__;
+    filename = filename.substr(0, filename.find_last_of("/\\") + 1) + "module-inherited-global.mjs";
+    auto source = builtinHelperFileRead(nullptr, filename.c_str(), "");
+    ASSERT_TRUE(source.hasValue());
+    auto result = evalScript(context.get(), source.value(), StringRef::createFromUTF8(filename.data(), filename.size()), true);
+    EXPECT_EQ(evalScript(context.get(), StringRef::createFromASCII("globalThis.inheritedBindingsPassed"), StringRef::createFromASCII("check.js"), false), "true") << result;
+    context.release();
+    instance.release();
+}
+
 TEST(EvaluateJob, Job)
 {
     PersistentRefHolder<VMInstanceRef> instance = VMInstanceRef::create();
