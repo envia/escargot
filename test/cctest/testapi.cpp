@@ -3893,6 +3893,48 @@ TEST(Module, InheritedGlobalBindings)
     instance.release();
 }
 
+TEST(Module, EvaluationPromise)
+{
+    const char* sources[] = {
+        "export const value = 42;",
+        "throw 42;",
+        "await Promise.resolve(); export const value = 42;",
+        "await Promise.resolve(); throw 42;",
+        "import { first } from './module-await-first.mjs'; import { second } from './module-await-second.mjs'; if (first + second !== 42) throw 99;",
+        "import './module-await-reject.mjs'; throw 99;"
+    };
+    for (size_t i = 0; i < 6; i++) {
+        PersistentRefHolder<VMInstanceRef> instance = VMInstanceRef::create();
+        PersistentRefHolder<ContextRef> context = createEscargotContext(instance.get());
+        auto parsed = context->scriptParser()->initializeScript(StringRef::createFromASCII(sources[i], strlen(sources[i])), StringRef::createFromASCII(__FILE__), true);
+        ASSERT_TRUE(parsed.isSuccessful());
+        auto result = Evaluator::execute(context.get(), [](ExecutionStateRef* state, ScriptRef* script) -> ValueRef* {
+            script->moduleInstantiate(state);
+            return script->moduleEvaluate(state); }, parsed.script.value());
+        ASSERT_TRUE(result.isSuccessful());
+        ASSERT_TRUE(result.result->isPromiseObject());
+        auto* promise = result.result->asPromiseObject();
+        if (i >= 2) {
+            EXPECT_EQ(promise->state(), PromiseObjectRef::Pending);
+        }
+        while (instance->hasPendingJob()) {
+            EXPECT_TRUE(instance->executePendingJob().isSuccessful());
+        }
+        EXPECT_EQ(promise->state(), i % 2 ? PromiseObjectRef::Rejected : PromiseObjectRef::FulFilled);
+        if (i % 2) {
+            EXPECT_TRUE(promise->promiseResult()->isInt32());
+            EXPECT_EQ(promise->promiseResult()->asInt32(), 42);
+        } else {
+            EXPECT_TRUE(promise->promiseResult()->isUndefined());
+        }
+        auto repeated = Evaluator::execute(context.get(), [](ExecutionStateRef* state, ScriptRef* script) -> ValueRef* { return script->moduleEvaluate(state); }, parsed.script.value());
+        EXPECT_TRUE(repeated.isSuccessful());
+        EXPECT_EQ(repeated.result, promise);
+        context.release();
+        instance.release();
+    }
+}
+
 TEST(EvaluateJob, Job)
 {
     PersistentRefHolder<VMInstanceRef> instance = VMInstanceRef::create();

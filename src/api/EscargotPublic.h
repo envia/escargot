@@ -2397,6 +2397,8 @@ public:
     };
     ModuleStatus moduleStatus();
     ValueRef* moduleInstantiate(ExecutionStateRef* state);
+    // Evaluate an instantiated module and return its evaluation promise.
+    // Runtime errors reject the promise, including after top-level await.
     ValueRef* moduleEvaluate(ExecutionStateRef* state);
 };
 

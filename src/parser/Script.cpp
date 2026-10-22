@@ -127,11 +127,11 @@ Value Script::moduleEvaluate(ExecutionState& state)
 {
     ASSERT(isModule());
 
-    auto result = moduleEvaluation(state);
-    if (result.gotException) {
-        throw result.value;
-    }
-    return result.value;
+    moduleEvaluation(state);
+    // Evaluate returns the top-level capability's promise, including for
+    // synchronous errors. Hosts need it to observe top-level await rejection.
+    // https://tc39.es/ecma262/#sec-moduleevaluation
+    return m_moduleData->m_topLevelCapability.value().m_promise;
 }
 
 AtomicStringVector Script::exportedNames(ExecutionState& state, std::vector<Script*>& exportStarSet)
@@ -1184,13 +1184,19 @@ void Script::asyncModuleFulfilled(ExecutionState& state, Script* module)
     // Set module.[[AsyncEvaluating]] to false.
     module->moduleData()->m_asyncEvaluating = false;
 
+    if (module->moduleData()->m_topLevelCapability) {
+        ASSERT(module->moduleData()->m_cycleRoot.value() == module);
+        Value value;
+        Object::call(state, module->moduleData()->m_topLevelCapability.value().m_resolveFunction, Value(), 1, &value);
+    }
+
     // For each Module m of module.[[AsyncParentModules]], do
     for (size_t i = 0; i < module->moduleData()->m_asyncParentModules.size(); i++) {
         auto m = module->moduleData()->m_asyncParentModules[i];
         // Decrement m.[[PendingAsyncDependencies]] by 1.
         m->moduleData()->m_pendingAsyncDependencies = m->moduleData()->m_pendingAsyncDependencies.value() - 1;
         // If m.[[PendingAsyncDependencies]] is 0 and m.[[EvaluationError]] is empty, then
-        if (m->moduleData()->m_pendingAsyncDependencies && !m->moduleData()->m_evaluationError.hasValue()) {
+        if (m->moduleData()->m_pendingAsyncDependencies.value() == 0 && !m->moduleData()->m_evaluationError.hasValue()) {
             // Assert: m.[[AsyncEvaluating]] is true.
             ASSERT(m->moduleData()->m_asyncEvaluating);
             // If m.[[CycleRoot]].[[EvaluationError]] is not empty, return undefined.
@@ -1265,17 +1271,12 @@ void Script::asyncModuleRejected(ExecutionState& state, Script* module, Value er
         Object::call(state, module->moduleData()->m_topLevelCapability.value().m_rejectFunction, Value(), 1, &argv);
     }
 
-    // Return undefined.
-    // throw error instead of return undefined
-    // if don't throw error, user cannot notify the error was occured
-    if (module->moduleData()->m_asyncPendingPromises.size()) {
-        for (size_t i = 0; i < module->moduleData()->m_asyncPendingPromises.size(); i++) {
-            module->moduleData()->m_asyncPendingPromises[i]->reject(state, error);
-        }
-        module->moduleData()->m_asyncPendingPromises.clear();
-    } else {
-        state.throwException(error);
+    // Notify dynamic importers as well as the evaluation promise. Rethrowing
+    // here would interrupt rejection propagation through async parents.
+    for (size_t i = 0; i < module->moduleData()->m_asyncPendingPromises.size(); i++) {
+        module->moduleData()->m_asyncPendingPromises[i]->reject(state, error);
     }
+    module->moduleData()->m_asyncPendingPromises.clear();
 }
 
 Value Script::asyncModuleRejectedFunction(ExecutionState& state, Value thisValue, size_t argc, Value* argv, Optional<Object*> newTarget)
