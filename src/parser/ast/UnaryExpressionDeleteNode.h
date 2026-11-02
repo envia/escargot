@@ -67,8 +67,22 @@ public:
                 context->giveUpRegister();
                 codeBlock->pushCode(UnaryDelete(ByteCodeLOC(m_loc.index), 0, p, dstRegister, AtomicString(), hasSuperExpression), context, this->m_loc.index);
             } else {
+                // The operand may be an optional chain, e.g. `delete a?.b.c`.
+                // Its own generateExpressionByteCode is bypassed here, so open
+                // the chain's jump list as it would. If the chain short-circuits,
+                // the operand is not a Reference and delete evaluates to true.
+                MemberExpressionNode* member = (MemberExpressionNode*)m_argument;
+                bool isOptionalChain = member->isStartOfOptionalChaining();
+                if (isOptionalChain) {
+                    context->pushOptionalChainingJumpPositionList();
+                }
+
                 ByteCodeRegisterIndex o = m_argument->getRegister(codeBlock, context);
-                ((MemberExpressionNode*)m_argument)->object()->generateExpressionByteCode(codeBlock, context, o);
+                member->object()->generateExpressionByteCode(codeBlock, context, o);
+                if (member->isOptional()) {
+                    codeBlock->pushCode<JumpIfUndefinedOrNull>(JumpIfUndefinedOrNull(ByteCodeLOC(m_loc.index), false, o), context, this->m_loc.index);
+                    context->addOptionalChainingJumpPosition(codeBlock->lastCodePosition<JumpIfUndefinedOrNull>());
+                }
                 ByteCodeRegisterIndex p;
                 if (((MemberExpressionNode*)m_argument)->isPreComputedCase()) {
                     // we can use LoadLiteral here
@@ -84,6 +98,17 @@ public:
                 context->giveUpRegister();
                 context->giveUpRegister();
                 codeBlock->pushCode(UnaryDelete(ByteCodeLOC(m_loc.index), o, p, dstRegister, AtomicString(), hasSuperExpression), context, this->m_loc.index);
+
+                if (isOptionalChain) {
+                    // Assignment must not change its target if evaluating the
+                    // operand or deleting the property throws (ECMA-262 13.15.2).
+                    codeBlock->pushCode(Jump(ByteCodeLOC(m_loc.index), SIZE_MAX), context, this->m_loc.index);
+                    size_t done = codeBlock->lastCodePosition<Jump>();
+                    context->linkOptionalChainingJumpPosition(codeBlock, codeBlock->currentCodeSize());
+                    codeBlock->pushCode(LoadLiteral(ByteCodeLOC(m_loc.index), dstRegister, Value(true)), context, this->m_loc.index);
+                    codeBlock->peekCode<Jump>(done)->m_jumpPosition = codeBlock->currentCodeSize();
+                    context->popOptionalChainingJumpPositionList();
+                }
             }
         } else {
             ByteCodeRegisterIndex o = m_argument->getRegister(codeBlock, context);
