@@ -1,0 +1,83 @@
+Title:
+With TCO, a short-circuited `return f?.()` runs the next statement or crashes
+
+Body:
+**Escargot (please complete the following information):**
+ - OS: Debian 13 (x86_64)
+ - Revision a1dfbf780192df47c0abfd8300ae33d9fca8f730
+ - Build: default options (`cmake -S . -B out -G Ninja -DCMAKE_BUILD_TYPE=Release`), so `ESCARGOT_TCO` is ON
+
+**Describe the bug**
+When Escargot is built with TCO (`ESCARGOT_TCO`, ON by default), a `return` whose argument is an optional chain ending in a call, such as `return f?.()`, does not return when the chain short-circuits. Instead of returning `undefined`, execution goes on after the `return`: the code that follows runs, and if the `return` is the last statement of the function, the interpreter runs past the end of the function's bytecode and crashes with SIGSEGV.
+
+The same happens for `return o?.m(1)` with `o = null`, for `return o?.m?.(1)` with `o = {}`, and for an arrow function `(g) => g?.(1)`, in sloppy and strict code. Builds with `-DESCARGOT_TCO=OFF` return `undefined` in all these cases.
+
+**Test case**
+Test code to reproduce the behavior:
+```js
+// escargot repro.js
+function h(g) {
+    if (!g)
+        return g?.(1);
+    return "fell through";
+}
+print(h(null));   // expected: undefined
+
+function f(g) { return g?.(1); }
+print(f(null));   // expected: undefined
+```
+
+Observed output:
+```
+fell through
+Segmentation fault
+```
+
+**Backtrace**
+Debug build (`-DCMAKE_BUILD_TYPE=Debug`, otherwise default options). After running past the end of the bytecode of `f`, the interpreter jumps to address 0, so frames #0 to #8 are garbage; a Release build jumps to 0xa1 the same way.
+```
+Program received signal SIGSEGV, Segmentation fault.
+0x0000000000000000 in ?? ()
+#0  0x0000000000000000 in ?? ()
+#1  0x00007ffe000f5c50 in ?? ()
+...
+#8  0x000055555568d110 in Escargot::CompressibleHeapPointer<Escargot::InterpretedCodeBlock, false>::valueWithBase (this=0x0, base=1) at src/runtime/CompressibleHeapPointer.h:186
+#9  0x00005555559aa09b in Escargot::FunctionObjectProcessCallGenerator::processCall<Escargot::ScriptFunctionObject, false, false, false, Escargot::FunctionObjectThisValueBinder, Escargot::FunctionObjectNewTargetBinder, Escargot::FunctionObjectReturnValueBinder> (...) at src/runtime/FunctionObjectInlines.h:235
+#10 0x00005555559a90d7 in Escargot::ScriptFunctionObject::call (this=0x7ffe00104ed0, state=..., thisValue=..., argc=1, argv=0x7fffffffcd18) at src/runtime/ScriptFunctionObject.cpp:121
+#11 0x00005555556d0d90 in Escargot::Interpreter::interpret (...) at src/interpreter/ByteCodeInterpreter.cpp:1714
+```
+
+**Expected behavior**
+Both calls return `undefined`, so the script prints `undefined` twice, as in Node and in an Escargot build with `-DESCARGOT_TCO=OFF`.
+
+- [OptionalExpression evaluation](https://tc39.es/ecma262/#sec-optional-chaining-evaluation): when the base value is `undefined` or `null`, the chain evaluates to `undefined` and nothing is called.
+- [ReturnStatement evaluation](https://tc39.es/ecma262/#sec-return-statement-runtime-semantics-evaluation): `return` completes with that value, so no code after it runs.
+
+**Screenshots**
+N/A
+
+**Additional context**
+Root cause appears to be in `CallExpressionNode::generateTCOExpressionByteCode` (`src/parser/ast/CallExpressionNode.h`). A call in tail position is emitted as `CallReturn` (`TailCall` in strict code) and sets `isTailCallForm`, so `ReturnStatementNode` (`src/parser/ast/ReturnStatementNode.h:97`) leaves out its `End`. When the call also starts an optional chain, the chain's `JumpIfUndefinedOrNull` is linked to the position right after the call, where there is no `End`. Bytecode of the test case (Debug build, `DUMP_BYTECODE=1`):
+```
+dumpBytecode h (1:0)>>>>>>>>>>>>>>>>>>>>>>
+0		get parameter r4 <- argv[0] | GetParameter (line: 1:11)
+40		unary not r1 <- r4 | UnaryNot (line: 2:10)
+80		jump if r1 is false -> 336 | JumpIfBoolean (line: 2:8)
+136		load r0 <- undefined | LoadLiteral (line: 3:16)
+184		load r1 <- 1.000000 | LoadLiteral (line: 3:20)
+232		jump if r4 is undefined or null -> 336 | JumpIfUndefinedOrNull (line: 3:16)
+288		call return r4(r1-r2) | CallReturn (line: 3:16)
+336		load r0 <- "fell through" | LoadLiteral (line: 4:12)
+384		end(return with r0) | End (line: 4:5)
+dumpBytecode...<<<<<<<<<<<<<<<<<<<<<<
+dumpBytecode f (8:0)>>>>>>>>>>>>>>>>>>>>>>
+0		get parameter r4 <- argv[0] | GetParameter (line: 8:32)
+40		load r0 <- undefined | LoadLiteral (line: 8:32)
+88		load r1 <- 1.000000 | LoadLiteral (line: 8:32)
+136		jump if r4 is undefined or null -> 240 | JumpIfUndefinedOrNull (line: 8:32)
+192		call return r4(r1-r2) | CallReturn (line: 8:32)
+dumpBytecode...<<<<<<<<<<<<<<<<<<<<<<
+```
+In `h` the short-circuit jump at 232 lands on the next statement (336); in `f` it lands at 240, past the end of the bytecode.
+
+Clearing `isTailCallForm` at the end of `generateTCOExpressionByteCode` when the call starts an optional chain fixes both cases: the call stays a `CallReturn`/`TailCall`, and `ReturnStatementNode` then emits an `End` that the short-circuit jump lands on.
