@@ -1100,7 +1100,6 @@
     <test id="staging/sm/expressions/nested-delete-name-in-evalcode"><reason>TODO</reason></test>
     <test id="staging/sm/expressions/object-literal-__proto__"><reason>TODO</reason></test>
     <test id="staging/sm/expressions/object-literal-computed-property-evaluation"><reason>TODO</reason></test>
-    <test id="staging/sm/expressions/optional-chain"><reason>TODO</reason></test>
     <test id="staging/sm/expressions/short-circuit-compound-assignment"><reason>TODO</reason></test>
     <test id="staging/sm/expressions/short-circuit-compound-assignment-anon-fns"><reason>TODO</reason></test>
     <test id="staging/sm/expressions/short-circuit-compound-assignment-property-key-evaluation"><reason>TODO</reason></test>
