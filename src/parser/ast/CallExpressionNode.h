@@ -247,6 +247,14 @@ public:
             }
         }
 
+        // A short-circuited optional call must not evaluate its arguments,
+        // so test the callee before generating them.
+        if (m_isOptional) {
+            codeBlock->pushCode<JumpIfUndefinedOrNull>(JumpIfUndefinedOrNull(ByteCodeLOC(m_loc.index), false, calleeIndex), context, this->m_loc.index);
+            size_t optionalJumpPos = codeBlock->lastCodePosition<JumpIfUndefinedOrNull>();
+            context->addOptionalChainingJumpPosition(optionalJumpPos);
+        }
+
         // `f(...args)` with nothing else in the argument list has no sibling argument whose
         // evaluation order needs preserving around the spread, so the call can be handed the
         // raw iterable directly (see CallComplexCase::SoleSpreadElement) instead of building a
@@ -266,12 +274,6 @@ public:
             auto args = generateArguments(codeBlock, context);
             argumentsStartIndex = args.first;
             hasSpreadElement = args.second;
-        }
-
-        if (m_isOptional) {
-            codeBlock->pushCode<JumpIfUndefinedOrNull>(JumpIfUndefinedOrNull(ByteCodeLOC(m_loc.index), false, calleeIndex), context, this->m_loc.index);
-            size_t optionalJumpPos = codeBlock->lastCodePosition<JumpIfUndefinedOrNull>();
-            context->addOptionalChainingJumpPosition(optionalJumpPos);
         }
 
         // drop callee, receiver registers
@@ -409,6 +411,14 @@ public:
             }
         }
 
+        // A short-circuited optional call must not evaluate its arguments,
+        // so test the callee before generating them.
+        if (m_isOptional) {
+            codeBlock->pushCode<JumpIfUndefinedOrNull>(JumpIfUndefinedOrNull(ByteCodeLOC(m_loc.index), false, calleeIndex), context, this->m_loc.index);
+            size_t optionalJumpPos = codeBlock->lastCodePosition<JumpIfUndefinedOrNull>();
+            context->addOptionalChainingJumpPosition(optionalJumpPos);
+        }
+
         // see the non-TCO generateExpressionByteCode above for the rationale; spread calls
         // (mixed or sole) never attempt TCO below, so this is a pure opcode substitution
         bool isSoleSpreadElement = m_arguments.size() == 1 && m_arguments.begin()->astNode()->type() == ASTNodeType::SpreadElement;
@@ -426,12 +436,6 @@ public:
             auto args = generateArguments(codeBlock, context);
             argumentsStartIndex = args.first;
             hasSpreadElement = args.second;
-        }
-
-        if (m_isOptional) {
-            codeBlock->pushCode<JumpIfUndefinedOrNull>(JumpIfUndefinedOrNull(ByteCodeLOC(m_loc.index), false, calleeIndex), context, this->m_loc.index);
-            size_t optionalJumpPos = codeBlock->lastCodePosition<JumpIfUndefinedOrNull>();
-            context->addOptionalChainingJumpPosition(optionalJumpPos);
         }
 
         // drop callee, receiver registers
