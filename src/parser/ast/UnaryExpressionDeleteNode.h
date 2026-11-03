@@ -33,6 +33,11 @@ public:
     }
 
     virtual ASTNodeType type() override { return ASTNodeType::UnaryExpressionDelete; }
+    virtual bool mayWriteDestinationBeforeCompletion() override
+    {
+        // `delete a?.b` loads true into dstRegister before evaluating the chain.
+        return m_argument->isMemberExpression() && m_argument->asMemberExpression()->isStartOfOptionalChaining();
+    }
     virtual void generateExpressionByteCode(ByteCodeBlock* codeBlock, ByteCodeGenerateContext* context, ByteCodeRegisterIndex dstRegister) override
     {
         bool hasSuperExpression = false;
@@ -75,6 +80,7 @@ public:
                 bool isOptionalChain = member->isStartOfOptionalChaining();
                 if (isOptionalChain) {
                     context->pushOptionalChainingJumpPositionList();
+                    codeBlock->pushCode(LoadLiteral(ByteCodeLOC(m_loc.index), dstRegister, Value(true)), context, this->m_loc.index);
                 }
 
                 ByteCodeRegisterIndex o = m_argument->getRegister(codeBlock, context);
@@ -100,13 +106,7 @@ public:
                 codeBlock->pushCode(UnaryDelete(ByteCodeLOC(m_loc.index), o, p, dstRegister, AtomicString(), hasSuperExpression), context, this->m_loc.index);
 
                 if (isOptionalChain) {
-                    // Assignment must not change its target if evaluating the
-                    // operand or deleting the property throws (ECMA-262 13.15.2).
-                    codeBlock->pushCode(Jump(ByteCodeLOC(m_loc.index), SIZE_MAX), context, this->m_loc.index);
-                    size_t done = codeBlock->lastCodePosition<Jump>();
                     context->linkOptionalChainingJumpPosition(codeBlock, codeBlock->currentCodeSize());
-                    codeBlock->pushCode(LoadLiteral(ByteCodeLOC(m_loc.index), dstRegister, Value(true)), context, this->m_loc.index);
-                    codeBlock->peekCode<Jump>(done)->m_jumpPosition = codeBlock->currentCodeSize();
                     context->popOptionalChainingJumpPositionList();
                 }
             }

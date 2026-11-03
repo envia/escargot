@@ -50,6 +50,11 @@ public:
     }
 
     virtual ASTNodeType type() override { return ASTNodeType::MemberExpression; }
+    virtual bool mayWriteDestinationBeforeCompletion() override
+    {
+        // An optional chain loads undefined into dstRegister before evaluating its links.
+        return m_startOfOptionalChaining;
+    }
 
     inline AtomicString propertyName()
     {

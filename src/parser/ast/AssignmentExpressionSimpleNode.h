@@ -33,6 +33,11 @@ public:
     }
 
     virtual ASTNodeType type() override { return ASTNodeType::AssignmentExpressionSimple; }
+    virtual bool mayWriteDestinationBeforeCompletion() override
+    {
+        // generateExpressionByteCode hands dstRegister to the right-hand side.
+        return m_right->mayWriteDestinationBeforeCompletion();
+    }
 
     virtual void generateExpressionByteCode(ByteCodeBlock* codeBlock, ByteCodeGenerateContext* context, ByteCodeRegisterIndex dstRegister) override
     {
@@ -96,9 +101,11 @@ public:
             context->m_isLeftBindingAffectedByRightExpression = oldIsLeftBindingAffectedByRightExpression;
             context->giveUpRegister();
         } else {
-            auto rt = m_right->type();
-            // A rejected await or a thrown yield must not update the assignment target.
-            if (m_left->isIdentifier() && (rt != ASTNodeType::ArrayExpression && rt != ASTNodeType::ObjectExpression) && !rightCanSuspend() && !context->shouldCareScriptExecutionResult()) {
+            // The right-hand side is compiled straight into the variable's register,
+            // so it must not write there before it completes: a later exception would
+            // change the target although PutValue never ran (ECMA-262 13.15.2).
+            // A rejected await or a thrown yield must not update the assignment target either.
+            if (m_left->isIdentifier() && !m_right->mayWriteDestinationBeforeCompletion() && !rightCanSuspend() && !context->shouldCareScriptExecutionResult()) {
                 auto r = m_left->asIdentifier()->isAllocatedOnStack(context);
                 if (std::get<0>(r)) {
                     m_left->asIdentifier()->addLexicalVariableErrorsIfNeeds(codeBlock, context, std::get<2>(r), false, true);

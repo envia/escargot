@@ -48,6 +48,11 @@ public:
     Node* callee() { return m_callee; }
     const NodeList& arguments() { return m_arguments; }
     virtual ASTNodeType type() override { return ASTNodeType::CallExpression; }
+    virtual bool mayWriteDestinationBeforeCompletion() override
+    {
+        // An optional chain loads undefined into dstRegister before evaluating its links.
+        return m_startOfOptionalChaining;
+    }
     std::pair<ByteCodeRegisterIndex, bool> generateArguments(ByteCodeBlock* codeBlock, ByteCodeGenerateContext* context, bool clearInCallingExpressionScope = true)
     {
         context->m_inCallingExpressionScope = !clearInCallingExpressionScope;
@@ -230,6 +235,7 @@ public:
 
         if (UNLIKELY(m_startOfOptionalChaining)) {
             context->pushOptionalChainingJumpPositionList();
+            codeBlock->pushCode(LoadLiteral(ByteCodeLOC(m_loc.index), dstRegister, Value()), context, this->m_loc.index);
         }
 
         ByteCodeRegisterIndex receiverIndex = REGISTER_LIMIT;
@@ -312,13 +318,7 @@ public:
         context->m_canSkipCopyToRegister = directBefore;
 
         if (UNLIKELY(m_startOfOptionalChaining)) {
-            // Do not write an assignment's destination until evaluation has
-            // completed; callee lookup and argument evaluation can both throw.
-            codeBlock->pushCode(Jump(ByteCodeLOC(m_loc.index), SIZE_MAX), context, this->m_loc.index);
-            size_t done = codeBlock->lastCodePosition<Jump>();
             context->linkOptionalChainingJumpPosition(codeBlock, codeBlock->currentCodeSize());
-            codeBlock->pushCode(LoadLiteral(ByteCodeLOC(m_loc.index), dstRegister, Value()), context, this->m_loc.index);
-            codeBlock->peekCode<Jump>(done)->m_jumpPosition = codeBlock->currentCodeSize();
             context->popOptionalChainingJumpPositionList();
         }
     }
@@ -406,6 +406,7 @@ public:
 
         if (UNLIKELY(m_startOfOptionalChaining)) {
             context->pushOptionalChainingJumpPositionList();
+            codeBlock->pushCode(LoadLiteral(ByteCodeLOC(m_loc.index), dstRegister, Value()), context, this->m_loc.index);
         }
 
         ByteCodeRegisterIndex receiverIndex = REGISTER_LIMIT;
@@ -526,13 +527,7 @@ public:
         context->m_canSkipCopyToRegister = directBefore;
 
         if (UNLIKELY(m_startOfOptionalChaining)) {
-            // Do not write an assignment's destination until evaluation has
-            // completed; callee lookup and argument evaluation can both throw.
-            codeBlock->pushCode(Jump(ByteCodeLOC(m_loc.index), SIZE_MAX), context, this->m_loc.index);
-            size_t done = codeBlock->lastCodePosition<Jump>();
             context->linkOptionalChainingJumpPosition(codeBlock, codeBlock->currentCodeSize());
-            codeBlock->pushCode(LoadLiteral(ByteCodeLOC(m_loc.index), dstRegister, Value()), context, this->m_loc.index);
-            codeBlock->peekCode<Jump>(done)->m_jumpPosition = codeBlock->currentCodeSize();
             context->popOptionalChainingJumpPositionList();
             // The short-circuit path still needs ReturnStatementNode's End.
             isTailCallForm = false;
