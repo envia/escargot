@@ -33,12 +33,6 @@ public:
     }
 
     virtual ASTNodeType type() override { return ASTNodeType::AssignmentExpressionSimple; }
-    virtual bool mayWriteDestinationBeforeCompletion() override
-    {
-        // generateExpressionByteCode hands dstRegister to the right-hand side.
-        return m_right->mayWriteDestinationBeforeCompletion();
-    }
-
     virtual void generateExpressionByteCode(ByteCodeBlock* codeBlock, ByteCodeGenerateContext* context, ByteCodeRegisterIndex dstRegister) override
     {
         ASSERT(!context->m_isLexicallyDeclaredBindingInitialization);

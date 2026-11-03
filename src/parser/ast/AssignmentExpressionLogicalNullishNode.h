@@ -33,11 +33,6 @@ public:
     }
 
     virtual ASTNodeType type() override { return ASTNodeType::AssignmentExpressionLogicalNullish; }
-    virtual bool mayWriteDestinationBeforeCompletion() override
-    {
-        // The current value is moved into dstRegister before the right-hand side runs.
-        return true;
-    }
     virtual void generateExpressionByteCode(ByteCodeBlock* codeBlock, ByteCodeGenerateContext* context, ByteCodeRegisterIndex dstRegister) override
     {
         bool slowMode = isLeftReferenceExpressionRelatedWithRightExpression();
