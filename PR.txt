@@ -1,0 +1,16 @@
+Fix assignment and optional chaining evaluation
+
+Prevent premature writes to assignment targets when RHS evaluation,
+nested stores, updates, or destructuring throw.
+
+Fix optional delete and call evaluation, including skipped keys and
+arguments, indirect eval, with receivers, and spread iterator ordering.
+
+Use the regression tests merged in Samsung/js_vendor_tc#105 and enable
+the optional-chain and eval-optional-call test262 tests.
+
+Validation:
+
+- 4,359 related test262 cases pass with Debug/TCO enabled.
+- 159 regression cases pass with Release/TCO disabled.
+- The new regression tests also pass on Node.js.
